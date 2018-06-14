@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-type DataHandler func(monId uint32, value int)
+type DataHandler func(monId uint32, value int, status uint32)
 type TagSubscribeHandler func(tag *TagItem)
 
 var mu sync.Mutex
@@ -98,6 +98,7 @@ type TagItem struct {
 	EncodedTagId   string
 	CustomAlias    string
 	HasCustomAlias bool
+	Quality		   uint32
 }
 
 func (t *TagItem) Hash() string {
@@ -303,6 +304,7 @@ func (c *Client) Subscribe(subId int, ns uint16, id string, handler DataHandler)
 			ReadOnly:     false,
 			MonitoringId: UA_UInt32(monResponse.monitoredItemId),
 			EncodedTagId: "",
+			Quality: 0,
 		}
 		mu.Lock()
 		c.sub.tags[t.Hash()] = t
@@ -348,14 +350,15 @@ func (c *Client) UnsubscribeTag(tag TagItem, subId int) UA_StatusCode {
 func go_handler(clt *C.UA_Client, subId C.UA_UInt32, subContext unsafe.Pointer, monId C.UA_UInt32, monContext unsafe.Pointer, value *C.UA_DataValue) {
 	monitoringId := uint32(monId)
 	val := (*int)(value.value.data)
+	status := (uint32)(value.status)
 
 	if staticHandlerOnChange == nil {
 		staticHandlerOnChange = default_handler_on_change
 	}
-	go staticHandlerOnChange(monitoringId, *val)
+	go staticHandlerOnChange(monitoringId, *val, status)
 }
 
 //export default_handler_on_change
-func default_handler_on_change(monId uint32, value int) {
-	log.Printf("[INFO] CHANGE EVENT monitoringId = %d, value = %d\n", monId, value)
+func default_handler_on_change(monId uint32, value int, status uint32) {
+	log.Printf("[INFO] CHANGE EVENT monitoringId = %d, value = %d, status = %d\n", monId, value, status)
 }
