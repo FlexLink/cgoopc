@@ -216,12 +216,14 @@ func (d *OPCUA_Driver) UpdateAliases(changes []map[string]interface{}) {
 	}
 }
 
-func (d *OPCUA_Driver) handlerOnChange(monId uint32, val int) {
+func (d *OPCUA_Driver) handlerOnChange(monId uint32, val int, status uint32) {
 	tag := d.Client.sub.monitors[monId]
 	tag.Data = val
+	tag.Quality = status
 	fulltag, ok := d.selectedTagsMap[tag.StringNodeId]
 	if ok {
 		fulltag.Data = tag.Data
+		fulltag.Quality = tag.Quality
 		d.OnValueChange(fulltag)
 	}
 	if d.LogLevel >= DEBUG1 {
