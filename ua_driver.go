@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 )
 
 type cache map[string]string
@@ -216,7 +216,7 @@ func (d *OPCUA_Driver) UpdateAliases(changes []map[string]interface{}) {
 	}
 }
 
-func (d *OPCUA_Driver) handlerOnChange(monId uint32, val int, status uint32) {
+func (d *OPCUA_Driver) handlerOnChange(monId uint32, val interface{}, status uint32) {
 	tag := d.Client.sub.monitors[monId]
 	tag.Data = val
 	tag.Quality = status
