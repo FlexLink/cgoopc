@@ -9,17 +9,17 @@ package cgoopc
 #include "cgoua_api.h"
 */
 import "C"
-import "unsafe"
-
 import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
+	"unsafe"
 )
 
-type DataHandler func(monId uint32, value int, status uint32)
+type DataHandler func(monId uint32, value interface{}, status uint32)
 type TagSubscribeHandler func(tag *TagItem)
 
 var mu sync.Mutex
@@ -98,7 +98,7 @@ type TagItem struct {
 	EncodedTagId   string
 	CustomAlias    string
 	HasCustomAlias bool
-	Quality		   uint32
+	Quality        uint32
 }
 
 func (t *TagItem) Hash() string {
@@ -304,7 +304,7 @@ func (c *Client) Subscribe(subId int, ns uint16, id string, handler DataHandler)
 			ReadOnly:     false,
 			MonitoringId: UA_UInt32(monResponse.monitoredItemId),
 			EncodedTagId: "",
-			Quality: 0,
+			Quality:      0,
 		}
 		mu.Lock()
 		c.sub.tags[t.Hash()] = t
@@ -349,16 +349,69 @@ func (c *Client) UnsubscribeTag(tag TagItem, subId int) UA_StatusCode {
 //export go_handler
 func go_handler(clt *C.UA_Client, subId C.UA_UInt32, subContext unsafe.Pointer, monId C.UA_UInt32, monContext unsafe.Pointer, value *C.UA_DataValue) {
 	monitoringId := uint32(monId)
-	val := (*int)(value.value.data)
+
+	var val interface{}
+
+	// TODO: Use C.UA_NodeId to detect data type instead of type name
+	// TODO: Handle missing types
+
+	// We attempt to figure out the incoming data type using the TypeName field
+	tName := C.GoString((*C.char)(unsafe.Pointer(value.value._type.typeName)))
+	switch tName {
+	case "Double":
+		val = *(*float64)(value.value.data)
+	case "Float":
+		val = *(*float32)(value.value.data)
+	case "Int64":
+		val = *(*int64)(value.value.data)
+	case "UInt64":
+		val = *(*uint64)(value.value.data)
+	case "Int32":
+		val = *(*int32)(value.value.data)
+	case "UInt32":
+		val = *(*uint32)(value.value.data)
+	case "Int16":
+		val = *(*int16)(value.value.data)
+	case "UInt16":
+		val = *(*uint16)(value.value.data)
+	case "Boolean":
+		val = *(*bool)(value.value.data)
+	case "Byte":
+		val = *(*uint8)(value.value.data)
+	case "SByte":
+		val = *(*int8)(value.value.data)
+	case "DateTime":
+		val = *(*int64)(value.value.data)
+	case "ByteString":
+		fallthrough
+	case "String":
+		sv := (*C.UA_String)(value.value.data)
+		cBytes := unsafe.Pointer(sv.data)
+
+		if sv.length > C.ulong(math.MaxInt32) {
+			log.Printf("[ERROR] Received string with size = %d longer than max size for UA_String\n", sv.length)
+			val = *(*int)(value.value.data)
+			break
+		}
+
+		// TODO: Can we avoid casting from C.ulong to C.int??
+		bytes := C.GoBytes(cBytes, C.int(sv.length))
+
+		val = string(bytes)
+	default:
+		// TODO: Should we really send int on unknown types?
+		val = *(*int)(value.value.data)
+	}
+
 	status := (uint32)(value.status)
 
 	if staticHandlerOnChange == nil {
 		staticHandlerOnChange = default_handler_on_change
 	}
-	go staticHandlerOnChange(monitoringId, *val, status)
+	go staticHandlerOnChange(monitoringId, val, status)
 }
 
 //export default_handler_on_change
-func default_handler_on_change(monId uint32, value int, status uint32) {
+func default_handler_on_change(monId uint32, value interface{}, status uint32) {
 	log.Printf("[INFO] CHANGE EVENT monitoringId = %d, value = %d, status = %d\n", monId, value, status)
 }
