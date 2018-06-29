@@ -324,8 +324,8 @@ func (c *Client) Subscribe(subId int, ns uint16, id string, handler DataHandler)
 
 // Unsubscribe removes subscription for individual tag by namespace, string ID, subscription ID.
 func (c *Client) Unsubscribe(ns UA_UInt16, id string, subId int) UA_StatusCode {
-	tag_hash := fmt.Sprintf("%d+%s", ns, id)
-	tag := c.sub.tags[tag_hash]
+	tagHash := fmt.Sprintf("%d+%s", ns, id)
+	tag := c.sub.tags[tagHash]
 	return c.UnsubscribeTag(tag, subId)
 }
 
@@ -347,10 +347,15 @@ func (c *Client) UnsubscribeTag(tag TagItem, subId int) UA_StatusCode {
 
 // go_handler is a static default OnChange event handler exported to C.
 //export go_handler
-func go_handler(clt *C.UA_Client, subId C.UA_UInt32, subContext unsafe.Pointer, monId C.UA_UInt32, monContext unsafe.Pointer, value *C.UA_DataValue) {
-	monitoringId := uint32(monId)
+func go_handler(clt *C.UA_Client, subID C.UA_UInt32, subContext unsafe.Pointer, monId C.UA_UInt32, monContext unsafe.Pointer, value *C.UA_DataValue) {
+	monitoringID := uint32(monId)
 
 	var val interface{}
+
+	if value == nil || value.value._type == nil || value.value.data == nil {
+		log.Print("[ERROR] Received nil value\n")
+		return
+	}
 
 	// TODO: Use C.UA_NodeId to detect data type instead of type name
 	// TODO: Handle missing types
@@ -408,10 +413,10 @@ func go_handler(clt *C.UA_Client, subId C.UA_UInt32, subContext unsafe.Pointer, 
 	if staticHandlerOnChange == nil {
 		staticHandlerOnChange = default_handler_on_change
 	}
-	go staticHandlerOnChange(monitoringId, val, status)
+	go staticHandlerOnChange(monitoringID, val, status)
 }
 
 //export default_handler_on_change
-func default_handler_on_change(monId uint32, value interface{}, status uint32) {
-	log.Printf("[INFO] CHANGE EVENT monitoringId = %d, value = %d, status = %d\n", monId, value, status)
+func default_handler_on_change(monID uint32, value interface{}, status uint32) {
+	log.Printf("[INFO] CHANGE EVENT monitoringID = %d, value = %d, status = %d\n", monID, value, status)
 }
